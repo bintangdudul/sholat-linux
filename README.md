@@ -27,7 +27,7 @@ If you find it useful, consider supporting the developer.
 
 - GitHub Sponsors: https://github.com/sponsors/bintangdudul
 - Trakteer: https://trakteer.id/bintangdudul/gift
-- https://saweria.co/bintangdudul
+- Saweria :https://saweria.co/bintangdudul
 
 ## 📄 License
 
