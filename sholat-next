@@ -1,0 +1,49 @@
+#!/bin/bash
+
+CFG="$HOME/.config/sholat/config"
+
+if [[ ! -f "$CFG" ]]; then
+  echo "Jalankan sholat-setup"
+  exit 0
+fi
+
+source "$CFG"
+
+# cek internet
+if ! curl -s --max-time 5 https://api.myquran.com >/dev/null; then
+  echo "Tidak ada koneksi internet"
+  exit 0
+fi
+
+TODAY=$(date +%Y-%m-%d)
+NOW=$(date +%s)
+
+DATA=$(curl -s "https://api.myquran.com/v2/sholat/jadwal/$CITY_ID/$TODAY")
+
+declare -A prayers=(
+  [Subuh]="$(echo "$DATA" | jq -r '.data.jadwal.subuh')"
+  [Dzuhur]="$(echo "$DATA" | jq -r '.data.jadwal.dzuhur')"
+  [Ashar]="$(echo "$DATA" | jq -r '.data.jadwal.ashar')"
+  [Maghrib]="$(echo "$DATA" | jq -r '.data.jadwal.maghrib')"
+  [Isya]="$(echo "$DATA" | jq -r '.data.jadwal.isya')"
+)
+
+for name in Subuh Dzuhur Ashar Maghrib Isya; do
+  t="${prayers[$name]}"
+  ts=$(date -d "$TODAY $t" +%s 2>/dev/null)
+
+  if [[ $ts -gt $NOW ]]; then
+    diff=$((ts - NOW))
+    jam=$((diff / 3600))
+    menit=$(((diff % 3600) / 60))
+
+    if [[ $jam -gt 0 ]]; then
+      echo "$name • $jam jam $menit menit lagi"
+    else
+      echo "$name • $menit menit lagi"
+    fi
+    exit 0
+  fi
+done
+
+echo "Semua sholat hari ini sudah lewat"

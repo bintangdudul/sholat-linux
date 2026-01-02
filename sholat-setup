@@ -1,0 +1,43 @@
+#!/bin/bash
+
+CFG="$HOME/.config/sholat/config"
+API="https://api.myquran.com/v2/sholat/kota/cari"
+
+command -v curl >/dev/null || { echo "curl belum terinstall"; exit 1; }
+command -v jq >/dev/null || { echo "jq belum terinstall"; exit 1; }
+
+read -rp "Masukkan nama kota (contoh: Sleman, Bandung): " QUERY
+
+DATA=$(curl -s "$API/$QUERY")
+
+COUNT=$(echo "$DATA" | jq '.data | length')
+
+if [[ $COUNT -eq 0 ]]; then
+  echo "❌ Kota tidak ditemukan"
+  exit 1
+fi
+
+echo
+echo "Ditemukan:"
+echo "$DATA" | jq -r '.data[] | "\(.id)) \(.lokasi)"'
+
+echo
+read -rp "Masukkan ID kota yang dipilih: " CITY_ID
+
+CITY_NAME=$(echo "$DATA" | jq -r --arg id "$CITY_ID" '.data[] | select(.id|tostring == $id) | .lokasi')
+
+if [[ -z "$CITY_NAME" ]]; then
+  echo "❌ ID tidak valid"
+  exit 1
+fi
+
+mkdir -p "$(dirname "$CFG")"
+
+cat > "$CFG" <<EOF
+CITY_ID=$CITY_ID
+CITY_NAME="$CITY_NAME"
+EOF
+
+echo
+echo "✔ Kota disimpan:"
+echo "  $CITY_NAME"
