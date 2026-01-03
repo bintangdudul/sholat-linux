@@ -1,20 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# =======================================
+# Script setup kota sholat final
+# =======================================
 
 CFG="$HOME/.config/sholat/config"
+CACHE="$HOME/.cache/sholat"
 API="https://api.myquran.com/v2/sholat/kota/cari"
 
-command -v curl >/dev/null || { echo "curl belum terinstall"; exit 1; }
-command -v jq >/dev/null || { echo "jq belum terinstall"; exit 1; }
+# ======== Cek dependency =========
+for cmd in curl jq date; do
+    command -v $cmd >/dev/null || { echo "$cmd belum terinstall"; exit 1; }
+done
 
+# ======== Fungsi reset cache =========
+reset_cache() {
+    if [[ -d "$CACHE" ]]; then
+        rm -rf "$CACHE"/*
+        echo "🧹 Cache lama dihapus karena kota diganti"
+    fi
+}
+
+# ======== Fungsi prefetch =========
+prefetch_cache() {
+    local DAYS=30
+    echo "📥 Prefetch jadwal sholat $DAYS hari ke depan untuk kota baru..."
+    for ((i=0;i<DAYS;i++)); do
+        DATE=$(date -d "+$i day" +%Y-%m-%d)
+        YEAR_MONTH=$(date -d "$DATE" +%Y-%m)
+        CACHE_DIR="$CACHE/$YEAR_MONTH"
+        CACHE_FILE="$CACHE_DIR/$DATE.json"
+
+        mkdir -p "$CACHE_DIR"
+
+        # Skip jika sudah ada
+        [[ -f "$CACHE_FILE" ]] && continue
+
+        DATA=$(curl -fsS --connect-timeout 2 --max-time 5 \
+            "https://api.myquran.com/v2/sholat/jadwal/$CITY_ID/$DATE" 2>/dev/null)
+
+        if echo "$DATA" | jq -e '.status == true' >/dev/null 2>&1; then
+            echo "$DATA" | jq '.data.jadwal | {subuh, terbit, dzuhur, ashar, maghrib, isya}' \
+                > "$CACHE_FILE"
+        fi
+    done
+    echo "✅ Prefetch selesai"
+}
+
+# ======== Input kota =========
 read -rp "Masukkan nama kota (contoh: Sleman, Bandung): " QUERY
 
 DATA=$(curl -s "$API/$QUERY")
-
 COUNT=$(echo "$DATA" | jq '.data | length')
 
 if [[ $COUNT -eq 0 ]]; then
-  echo "❌ Kota tidak ditemukan"
-  exit 1
+    echo "❌ Kota tidak ditemukan"
+    exit 1
 fi
 
 echo
@@ -23,21 +64,27 @@ echo "$DATA" | jq -r '.data[] | "\(.id)) \(.lokasi)"'
 
 echo
 read -rp "Masukkan ID kota yang dipilih: " CITY_ID
-
 CITY_NAME=$(echo "$DATA" | jq -r --arg id "$CITY_ID" '.data[] | select(.id|tostring == $id) | .lokasi')
 
 if [[ -z "$CITY_NAME" ]]; then
-  echo "❌ ID tidak valid"
-  exit 1
+    echo "❌ ID tidak valid"
+    exit 1
 fi
 
-mkdir -p "$(dirname "$CFG")"
+# ======== Reset cache otomatis =========
+reset_cache
 
+# ======== Simpan config =========
+mkdir -p "$(dirname "$CFG")"
 cat > "$CFG" <<EOF
 CITY_ID=$CITY_ID
 CITY_NAME="$CITY_NAME"
 EOF
 
 echo
-echo "✔ Kota disimpan:"
-echo "  $CITY_NAME"
+echo "✔ Kota disimpan: $CITY_NAME"
+
+# ======== Prefetch offline 30 hari =========
+prefetch_cache
+
+echo "🎉 Siap! Semua script sholat sekarang bisa offline penuh 30 hari."

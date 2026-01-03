@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+CACHE="$HOME/.cache/sholat"
+
+echo "🧹 Reset cache sholat untuk kota baru"
+rm -rf "$CACHE"/*
+
+echo "✅ Semua cache lama telah dihapus"
+echo "Sekarang jalankan: sholat-prefetch 30 untuk kota baru"

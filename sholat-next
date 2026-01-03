@@ -1,49 +1,74 @@
 #!/bin/bash
 
 CFG="$HOME/.config/sholat/config"
+CACHE_BASE="$HOME/.cache/sholat"
 
-if [[ ! -f "$CFG" ]]; then
-  echo "Jalankan sholat-setup"
-  exit 0
-fi
-
+[[ -f "$CFG" ]] || { echo "Jalankan sholat-setup"; exit 0; }
 source "$CFG"
 
-# cek internet
-if ! curl -s --max-time 5 https://api.myquran.com >/dev/null; then
-  echo "Tidak ada koneksi internet"
+TODAY=$(date +%Y-%m-%d)
+YEAR_MONTH=$(date +%Y-%m)
+NOW=$(date +%s)
+
+CACHE_DIR="$CACHE_BASE/$YEAR_MONTH"
+CACHE_FILE="$CACHE_DIR/$TODAY.json"
+
+mkdir -p "$CACHE_DIR"
+
+# ===============================
+# FETCH HARIAN (ONLINE → CACHE)
+# ===============================
+if [[ ! -f "$CACHE_FILE" ]]; then
+  DATA=$(curl -fsS \
+    --connect-timeout 2 --max-time 4 \
+    "https://api.myquran.com/v2/sholat/jadwal/$CITY_ID/$TODAY" \
+    2>/dev/null)
+
+  if echo "$DATA" | jq -e '.status == true' >/dev/null 2>&1; then
+    echo "$DATA" | jq '.data.jadwal
+      | {subuh, terbit, dzuhur, ashar, maghrib, isya}' \
+      > "$CACHE_FILE"
+  fi
+fi
+
+# ===============================
+# OFFLINE MODE
+# ===============================
+if [[ ! -f "$CACHE_FILE" ]]; then
+  echo "⛔ Jadwal belum tersedia"
   exit 0
 fi
 
-TODAY=$(date +%Y-%m-%d)
-NOW=$(date +%s)
+DATA=$(cat "$CACHE_FILE")
 
-DATA=$(curl -s "https://api.myquran.com/v2/sholat/jadwal/$CITY_ID/$TODAY")
-
+# ===============================
+# ESTIMASI SHOLAT TERDEKAT
+# ===============================
 declare -A prayers=(
-  [Subuh]="$(echo "$DATA" | jq -r '.data.jadwal.subuh')"
-  [Dzuhur]="$(echo "$DATA" | jq -r '.data.jadwal.dzuhur')"
-  [Ashar]="$(echo "$DATA" | jq -r '.data.jadwal.ashar')"
-  [Maghrib]="$(echo "$DATA" | jq -r '.data.jadwal.maghrib')"
-  [Isya]="$(echo "$DATA" | jq -r '.data.jadwal.isya')"
+  [Subuh]="$(jq -r '.subuh' <<< "$DATA")"
+  [Terbit]="$(jq -r '.terbit' <<< "$DATA")"
+  [Dzuhur]="$(jq -r '.dzuhur' <<< "$DATA")"
+  [Ashar]="$(jq -r '.ashar' <<< "$DATA")"
+  [Maghrib]="$(jq -r '.maghrib' <<< "$DATA")"
+  [Isya]="$(jq -r '.isya' <<< "$DATA")"
 )
 
-for name in Subuh Dzuhur Ashar Maghrib Isya; do
+for name in Subuh Terbit Dzuhur Ashar Maghrib Isya; do
   t="${prayers[$name]}"
   ts=$(date -d "$TODAY $t" +%s 2>/dev/null)
 
-  if [[ $ts -gt $NOW ]]; then
-    diff=$((ts - NOW))
-    jam=$((diff / 3600))
-    menit=$(((diff % 3600) / 60))
+  [[ $ts -le $NOW ]] && continue
 
-    if [[ $jam -gt 0 ]]; then
-      echo "$name • $jam jam $menit menit lagi"
-    else
-      echo "$name • $menit menit lagi"
-    fi
-    exit 0
+  diff=$((ts - NOW))
+  jam=$((diff / 3600))
+  menit=$(((diff % 3600) / 60))
+
+  if [[ $jam -gt 0 ]]; then
+    echo "$name • $jam jam $menit menit lagi"
+  else
+    echo "$name • $menit menit lagi"
   fi
+  exit 0
 done
 
 echo "Semua sholat hari ini sudah lewat"
