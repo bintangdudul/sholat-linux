@@ -7,7 +7,7 @@ CFG="$HOME/.config/sholat"
 
 mkdir -p "$BIN" "$CFG"
 
-cp sholat-setup sholat-next "$BIN"
+cp sholat-setup sholat-next sholat-reset-cache "$BIN"
 chmod +x "$BIN"/sholat-*
 
 echo "✔ sholat-linux terinstall"

@@ -2,6 +2,7 @@
 
 CFG="$HOME/.config/sholat/config"
 CACHE_BASE="$HOME/.cache/sholat"
+NOTIF_DIR="$CACHE_BASE/notified"
 
 [[ -f "$CFG" ]] || { echo "Jalankan sholat-setup"; exit 0; }
 source "$CFG"
@@ -13,7 +14,7 @@ NOW=$(date +%s)
 CACHE_DIR="$CACHE_BASE/$YEAR_MONTH"
 CACHE_FILE="$CACHE_DIR/$TODAY.json"
 
-mkdir -p "$CACHE_DIR"
+mkdir -p "$CACHE_DIR" "$NOTIF_DIR"
 
 # ===============================
 # FETCH HARIAN (ONLINE → CACHE)
@@ -42,7 +43,7 @@ fi
 DATA=$(cat "$CACHE_FILE")
 
 # ===============================
-# ESTIMASI SHOLAT TERDEKAT
+# PARSE JADWAL
 # ===============================
 declare -A prayers=(
   [Subuh]="$(jq -r '.subuh' <<< "$DATA")"
@@ -53,6 +54,32 @@ declare -A prayers=(
   [Isya]="$(jq -r '.isya' <<< "$DATA")"
 )
 
+# ===============================
+# NOTIF TEPAT WAKTU SHOLAT
+# ===============================
+notify_sholat() {
+  notify-send \
+    --urgency=critical \
+    --expire-time=0 \
+    "🕌 Waktu Sholat" \
+    "Saatnya sholat $1 ($2)"
+}
+
+for name in Subuh Dzuhur Ashar Maghrib Isya; do
+  t="${prayers[$name]}"
+  ts=$(date -d "$TODAY $t" +%s 2>/dev/null) || continue
+
+  flag="$NOTIF_DIR/$TODAY-$name"
+
+  if [[ $NOW -ge $ts && ! -f "$flag" ]]; then
+    notify_sholat "$name" "$t"
+    touch "$flag"
+  fi
+done
+
+# ===============================
+# ESTIMASI SHOLAT TERDEKAT
+# ===============================
 for name in Subuh Terbit Dzuhur Ashar Maghrib Isya; do
   t="${prayers[$name]}"
   ts=$(date -d "$TODAY $t" +%s 2>/dev/null)
@@ -64,9 +91,9 @@ for name in Subuh Terbit Dzuhur Ashar Maghrib Isya; do
   menit=$(((diff % 3600) / 60))
 
   if [[ $jam -gt 0 ]]; then
-    echo "$name • $jam jam $menit menit lagi"
+    echo "$name • $jam jam $menit menit"
   else
-    echo "$name • $menit menit lagi"
+    echo "$name • $menit menit"
   fi
   exit 0
 done

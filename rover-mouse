@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# ===============================
+# Script Jadwal Sholat Hari Ini
+# ===============================
+
+CACHE_BASE="$HOME/.cache/sholat"
+TODAY=$(date +%Y-%m-%d)
+YEAR_MONTH=$(date +%Y-%m)
+NOW=$(date +%s)
+
+CACHE_FILE="$CACHE_BASE/$YEAR_MONTH/$TODAY.json"
+
+# ===== Cek apakah cache tersedia =====
+if [[ ! -f "$CACHE_FILE" ]]; then
+    echo "⛔ Jadwal sholat belum tersedia"
+    exit 0
+fi
+
+DATA=$(cat "$CACHE_FILE")
+
+# ===== Ambil waktu sholat =====
+subuh=$(jq -r '.subuh' <<< "$DATA")
+terbit=$(jq -r '.terbit' <<< "$DATA")
+dzuhur=$(jq -r '.dzuhur' <<< "$DATA")
+ashar=$(jq -r '.ashar' <<< "$DATA")
+maghrib=$(jq -r '.maghrib' <<< "$DATA")
+isya=$(jq -r '.isya' <<< "$DATA")
+
+# ===== Cari sholat berikutnya =====
+next=""
+for p in subuh dzuhur ashar maghrib isya; do
+    t=$(jq -r ".$p" <<< "$DATA")
+    ts=$(date -d "$t" +%s 2>/dev/null)
+    if [[ $ts -gt $NOW ]]; then
+        next="$p"
+        break
+    fi
+done
+
+# ===== Fungsi untuk menandai sholat berikutnya =====
+mark() {
+    [[ "$1" == "$next" ]] && echo "▶" || echo " "
+}
+
+# ===== Tampilkan jadwal =====
+echo "🕌 Jadwal Sholat Hari Ini"
+echo "────────────────────────"
+
+printf "%s Subuh    : %s\n"   "$(mark subuh)"   "$subuh"
+printf "  Terbit   : %s\n"       "$terbit"
+printf "%s Dzuhur   : %s\n"    "$(mark dzuhur)"  "$dzuhur"
+printf "%s Ashar    : %s\n"    "$(mark ashar)"   "$ashar"
+printf "%s Maghrib  : %s\n"    "$(mark maghrib)" "$maghrib"
+printf "%s Isya     : %s\n"    "$(mark isya)"    "$isya"
